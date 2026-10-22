@@ -1,0 +1,13 @@
+{
+  "name": "smart-limits",
+  "owner": {
+    "name": "Andrey Bogdanov"
+  },
+  "plugins": [
+    {
+      "name": "smart-limits",
+      "source": "./",
+      "description": "Lets the model compact the conversation at a point of its own choosing once the context window is past a threshold, and holds the work when a subscription window is nearly used up."
+    }
+  ]
+}

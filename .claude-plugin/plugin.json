@@ -1,0 +1,48 @@
+{
+  "name": "smart-limits",
+  "version": "0.1.0",
+  "description": "Lets the model compact the conversation at a point of its own choosing once the context window is past a threshold, and holds the work when a subscription window is nearly used up.",
+  "author": {
+    "name": "Andrey Bogdanov"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "compactAt": {
+      "type": "number",
+      "title": "Compact at",
+      "description": "Percent of the context window from which the model is reminded, on every tool result, to ask for a compaction at a good point; the conversation is compacted when that turn ends and a prompt wakes the model. 0 turns it off.",
+      "default": 70
+    },
+    "compactInstructions": {
+      "type": "string",
+      "title": "Compaction instructions",
+      "description": "What every summary should keep, added after the model's own note. Empty: the model's note alone.",
+      "default": ""
+    },
+    "limitSoft": {
+      "type": "number",
+      "title": "Soft limit",
+      "description": "Percent of a subscription window at which a toast warns once per window. 0 turns it off.",
+      "default": 80
+    },
+    "limitHard": {
+      "type": "number",
+      "title": "Hard limit",
+      "description": "Percent of a subscription window at which the command below runs once and Bash, Write, Edit, NotebookEdit and new agents are refused until the window resets. 0 turns it off.",
+      "default": 90
+    },
+    "atHard": {
+      "type": "string",
+      "title": "Command at the hard limit",
+      "description": "A slash command run once when the hard limit is crossed, written as typed after the slash (name, then arguments after a space): the pause command of whatever drives the work. Empty: none.",
+      "default": ""
+    },
+    "atReset": {
+      "type": "string",
+      "title": "Command after the hard limit clears",
+      "description": "A slash command run once when no window holds the hard limit any more (the window reset), written as typed after the slash: the command that continues the paused work. Empty: none.",
+      "default": ""
+    }
+  }
+}
