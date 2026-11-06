@@ -43,8 +43,8 @@ test('the context: the reminder rides on tool results past the threshold, in the
 
   const {text} = await $.command.run(runInput);
   expect(text).toContain('compaction: the model is reminded: the window is past 50%; none at the model\'s request yet');
-  // Without a reading the status line is empty.
-  expect(seen.statuses.every(status => status === undefined)).toBe(true);
+  // Off a subscription the status line shows the context against the compaction threshold alone.
+  expect(seen.statuses.at(-1)).toBe('ctx 55/50');
 });
 
 test('the context: the model asks, the compaction follows the end of the turn, a prompt wakes the model', {

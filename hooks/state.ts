@@ -1,16 +1,42 @@
 // The state of one session, kept in the module between events: the settings
-// in force, the latest reading of the windows and the context, which
-// crossings were announced, whether the tools are refused, and what the
-// plugin knows about compactions. A reload of the module starts it over.
+// in force (the engine's values, with a project's files over them), the
+// latest reading of the windows and the context, which crossings were
+// announced, whether the tools are refused, and what the plugin knows about
+// compactions. A reload of the module starts it over.
 
-import type {EngineInterface, PluginOptions, SessionContextUsage, Timer} from 'claude-code';
+import type {EngineInterface, PluginOptions, SessionContextUsage, SettingsSource, Timer} from 'claude-code';
 
 import type {Compaction, CompactRequest, EngineCompaction} from '../src/status.ts';
 import type {Window} from '../src/windows.ts';
 
-import {DEFAULT_SETTINGS, parseSettings, type Settings} from '../src/options.ts';
+import {
+  DEFAULT_SETTINGS, mergeOptions, optionsIn, type OptionsLayer, overridesSuffix, parseSettings, ProjectFile,
+  type Settings
+} from '../src/options.ts';
 
-export const OWN_COMMAND_PREFIX = 'smart-limits:';
+const PLUGIN_NAME = 'smart-limits';
+export const OWN_COMMAND_PREFIX = `${PLUGIN_NAME}:`;
+
+// The sources read at the start, lowest first, over the engine's values
+// (the user's settings, --settings and the managed policy): the project's
+// shared file, the person's own file in it, then --settings and the policy
+// again, since the engine ranks those above a project.
+const SOURCES: ReadonlyArray<{
+  file: ProjectFile | undefined;
+  source: SettingsSource;
+}> = [{
+  file: ProjectFile.Shared,
+  source: 'project'
+}, {
+  file: ProjectFile.Local,
+  source: 'local'
+}, {
+  file: undefined,
+  source: 'flag'
+}, {
+  file: undefined,
+  source: 'policy'
+}];
 
 // The values kept in the engine's session state across a hot reload of the
 // module (types/index.d.ts); `plugin` and `key` are literals, as `$.state`
@@ -71,6 +97,32 @@ export const state: State = {
 
 export function configure(options: PluginOptions): void {
   state.settings = parseSettings(options, OWN_COMMAND_PREFIX);
+}
+
+// `options` are the engine's values the module was loaded with. A source
+// that cannot be read is left out, with a line in the debug log. Read once
+// per load of the module: a file changed later applies from the next session.
+export async function configureProject($: EngineInterface, options: PluginOptions): Promise<void> {
+  const layers: OptionsLayer[] = [{
+    options,
+    file: undefined
+  }];
+  for (const {file, source} of SOURCES) {
+    try {
+      layers.push({
+        file,
+        options: optionsIn(await $.settings.read({
+          source,
+          key: 'pluginConfigs'
+        }), PLUGIN_NAME)
+      });
+    } catch (error) {
+      $.ui.log(`the ${source} settings were not read: ${String(error)}`, {to: 'debug'});
+    }
+  }
+
+  const merged = mergeOptions(layers);
+  state.settings = parseSettings(merged.options, OWN_COMMAND_PREFIX, merged.overrides);
 }
 
 // What the engine kept for this session, taken back at the start: after a
@@ -173,5 +225,5 @@ export function settingsLine(): string {
   return `compact at ${thresholdText(settings.compactAt)}, soft ${thresholdText(settings.limitSoft)}, hard ${
     thresholdText(settings.limitHard)}, at hard ${
     settings.atHard === undefined ? 'none' : `/${settings.atHard.command}`}, at reset ${
-    settings.atReset === undefined ? 'none' : `/${settings.atReset.command}`}`;
+    settings.atReset === undefined ? 'none' : `/${settings.atReset.command}`}${overridesSuffix(settings.overrides)}`;
 }

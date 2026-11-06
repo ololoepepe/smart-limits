@@ -18,7 +18,7 @@ export const register: Register = (on, options) => {
   configure(options);
 
   on('session.start', async ($, event, next) => {
-    await startSession($, event);
+    await startSession($, event, options);
     return await next(event);
   });
 

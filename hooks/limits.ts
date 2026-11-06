@@ -1,11 +1,11 @@
-// The subscription windows: the status line while there is a reading, one
-// warning per crossing of the soft limit, and at the hard limit the command
-// the settings name plus the refusal of Bash, Write, Edit, NotebookEdit and
-// new agents in every loop, until the share falls below the limit or the
-// window resets. A timer at the nearest reset reads the engine's figures
-// again, since no measurement arrives while the session is idle; once no
-// window holds the hard limit, the command named for that moment runs, so
-// that a run paused at the limit goes on.
+// The subscription windows: the status line, one warning per crossing of
+// the soft limit, and at the hard limit the command the settings name plus
+// the refusal of Bash, Write, Edit, NotebookEdit and new agents in every
+// loop, until the share falls below the limit or the window resets. A timer
+// at the nearest reset reads the engine's figures again, since no
+// measurement arrives while the session is idle; once no window holds the
+// hard limit, the command named for that moment runs, so that a run paused
+// at the limit goes on.
 
 import type {EngineInterface, On, SessionRateLimit} from 'claude-code';
 
@@ -79,7 +79,6 @@ export function applyWindows($: EngineInterface, windows: readonly SessionRateLi
   const {settings} = state;
   state.windows = windows.map(window => ({...window}));
   const live = liveWindows(state.windows, now);
-  $.ui.status(statusLine(live, now));
 
   const crossings = crossingsOf(live, settings);
   const newSoft = entered(state.soft, crossings.soft);
@@ -115,12 +114,23 @@ export function applyWindows($: EngineInterface, windows: readonly SessionRateLi
   armResetTimer($, nextResetAt(live, now), now);
 }
 
+// The status line, from the last reading of the windows and of the context.
+export function showStatus($: EngineInterface, now: number): void {
+  $.ui.status(statusLine({
+    now,
+    contextPercent: state.context?.percent,
+    settings: state.settings,
+    windows: liveWindows(state.windows, now)
+  }));
+}
+
 export async function reevaluate($: EngineInterface): Promise<void> {
   try {
     const usage = await $.session.usage();
     const now = await $.clock.now();
     state.context = usage.context;
     applyWindows($, usage.rateLimits, now);
+    showStatus($, now);
   } catch (error) {
     $.ui.log(`reading the usage failed: ${String(error)}`, {to: 'debug'});
   }

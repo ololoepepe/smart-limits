@@ -32,8 +32,12 @@ export function windowName(kind: string): string {
   return NAMES[kind] ?? `the ${kind} window`;
 }
 
+function numberText(value: number): string {
+  return Number.isSafeInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function percentText(value: number): string {
-  return `${Number.isSafeInteger(value) ? value : value.toFixed(1)}%`;
+  return `${numberText(value)}%`;
 }
 
 // The windows whose reset is still ahead. A reading the engine keeps from
@@ -93,19 +97,44 @@ export function nextResetAt(windows: readonly Window[], now: number): number | u
   return ahead.length === 0 ? undefined : Math.min(...ahead);
 }
 
-// `5h 63% · 7d 41% · reset 18:40`; nothing without a reading.
-export function statusLine(windows: readonly Window[], now: number): string | undefined {
-  if (windows.length === 0) {
-    return undefined;
+export type StatusLineInput = {
+  // The context fill in percent; undefined before the first response and
+  // right after a compaction.
+  contextPercent: number | undefined;
+  now: number;
+  settings: Settings;
+  // The live windows.
+  windows: readonly Window[];
+};
+
+// `5h 63% · 7d 41% · soft 80 · hard 90 · ctx 52/70 · reset 18:40`: the
+// windows, one at the hard limit marked STOP, the thresholds that are on,
+// the context fill over the compaction threshold, the nearest reset. Without
+// a reading of the windows only the context; nothing without either.
+export function statusLine(input: StatusLineInput): string | undefined {
+  const {settings, windows} = input;
+  const parts = windows.map(window => `${windowLabel(window.kind)} ${percentText(window.percentUsed)}${
+    settings.limitHard > 0 && window.percentUsed >= settings.limitHard ? ' STOP' : ''}`);
+  if (windows.length > 0 && settings.limitSoft > 0) {
+    parts.push(`soft ${numberText(settings.limitSoft)}`);
   }
 
-  const parts = windows.map(window => `${windowLabel(window.kind)} ${percentText(window.percentUsed)}`);
-  const reset = nextResetAt(windows, now);
+  if (windows.length > 0 && settings.limitHard > 0) {
+    parts.push(`hard ${numberText(settings.limitHard)}`);
+  }
+
+  if (input.contextPercent !== undefined) {
+    parts.push(settings.compactAt > 0 ?
+      `ctx ${numberText(input.contextPercent)}/${numberText(settings.compactAt)}` :
+      `ctx ${percentText(input.contextPercent)}`);
+  }
+
+  const reset = nextResetAt(windows, input.now);
   if (reset !== undefined) {
-    parts.push(`reset ${localTime(reset, now)}`);
+    parts.push(`reset ${localTime(reset, input.now)}`);
   }
 
-  return parts.join(' · ');
+  return parts.length === 0 ? undefined : parts.join(' · ');
 }
 
 function resetText(window: Window, now: number): string {

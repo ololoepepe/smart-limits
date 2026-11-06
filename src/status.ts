@@ -1,8 +1,7 @@
 // The text of /smart-limits:status: the windows with their shares and
 // resets, the context fill, the thresholds, and what is in force now.
 
-import type {Command, Settings} from './options.ts';
-
+import {type Command, overridesSuffix, type Settings} from './options.ts';
 import {localTime, parseIso, waitText} from './time.ts';
 import {percentText, type Window, windowLabel} from './windows.ts';
 
@@ -117,7 +116,7 @@ export function statusText(input: StatusInput): string {
     `context: ${contextText(input.context)}`,
     `thresholds: compact at ${thresholdText(settings.compactAt)}, soft ${thresholdText(settings.limitSoft)}, hard ${
       thresholdText(settings.limitHard)}, at hard: ${commandText(settings.atHard)}, at reset: ${
-      commandText(settings.atReset)}`,
+      commandText(settings.atReset)}${overridesSuffix(settings.overrides)}`,
     `in force: ${inForceText(input)}`,
     `compaction: ${compactionText(input)}`
   ].join('\n');

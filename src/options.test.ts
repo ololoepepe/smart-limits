@@ -1,6 +1,8 @@
 import {describe, expect, test} from 'claude-code/testing';
 
-import {parseCommand, parsePercent, parseSettings} from './options.ts';
+import {
+  mergeOptions, optionsIn, overridesSuffix, parseCommand, parsePercent, parseSettings, ProjectFile
+} from './options.ts';
 
 describe('the settings', () => {
   test('a threshold is a percent, and anything else turns the mechanism off', () => {
@@ -35,7 +37,8 @@ describe('the settings', () => {
       compactInstructions: undefined,
       limitHard: 90,
       limitSoft: 80,
-      notes: []
+      notes: [],
+      overrides: []
     });
     expect(parseSettings({
       atHard: 'pause',
@@ -57,7 +60,8 @@ describe('the settings', () => {
       compactInstructions: 'keep the plan',
       limitHard: 2,
       limitSoft: 0,
-      notes: []
+      notes: [],
+      overrides: []
     });
   });
 
@@ -75,5 +79,77 @@ describe('the settings', () => {
       'does not route it back to the plugin, so nothing runs after the hard limit clears; name another command or ' +
       'leave the field empty'
     ]);
+  });
+});
+
+describe('the settings of a project', () => {
+  test('the plugin\'s block in a settings file is found under any marketplace, and nothing else is', () => {
+    expect(optionsIn({
+      'other@smart-limits': {
+        options: {atHard: 'no'}
+      },
+      'smart-limits': {
+        options: {compactAt: 1}
+      },
+      'smart-limits@smart-limits': {
+        options: {atHard: 'pause'}
+      },
+      'smart-limits-fork@x': {
+        options: {atHard: 'no'}
+      }
+    }, 'smart-limits')).toEqual({
+      atHard: 'pause',
+      compactAt: 1
+    });
+    expect(optionsIn(undefined, 'smart-limits')).toEqual({});
+    expect(optionsIn({
+      'smart-limits@x': {options: 'pause'}
+    }, 'smart-limits')).toEqual({});
+  });
+
+  test('each field takes the last source that sets it, and a field from the project names its file', () => {
+    const merged = mergeOptions([{
+      file: undefined,
+      options: {
+        atHard: 'pause',
+        atReset: 'resume',
+        limitHard: 90
+      }
+    }, {
+      file: ProjectFile.Shared,
+      options: {
+        atHard: 'pause from project',
+        atReset: '',
+        limitHard: 70
+      }
+    }, {
+      file: ProjectFile.Local,
+      options: {
+        atHard: 'pause from local',
+        limitHard: null,
+        unknown: 1
+      }
+    }]);
+    expect(merged.options).toEqual({
+      atHard: 'pause from local',
+      atReset: '',
+      limitHard: 70
+    });
+    expect(merged.overrides).toEqual([{
+      field: 'limitHard',
+      file: ProjectFile.Shared
+    }, {
+      field: 'atHard',
+      file: ProjectFile.Local
+    }, {
+      field: 'atReset',
+      file: ProjectFile.Shared
+    }]);
+    // An empty text clears the user's command for the project.
+    expect(parseSettings(merged.options, 'smart-limits:').atReset).toBe(undefined);
+    expect(overridesSuffix(merged.overrides)).toBe(
+      '; atHard from .claude/settings.local.json; limitHard, atReset from .claude/settings.json'
+    );
+    expect(overridesSuffix([])).toBe('');
   });
 });

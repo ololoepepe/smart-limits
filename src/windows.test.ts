@@ -1,9 +1,9 @@
 import {describe, expect, test} from 'claude-code/testing';
 
-import {DEFAULT_SETTINGS} from './options.ts';
+import {DEFAULT_SETTINGS, type Settings} from './options.ts';
 import {
-  clearedText, crossingsOf, denyText, entered, liveWindows, nextResetAt, peakWindow, softText, statusLine, windowByKey,
-  windowsAbove
+  clearedText, crossingsOf, denyText, entered, liveWindows, nextResetAt, peakWindow, softText, statusLine, type Window,
+  windowByKey, windowsAbove
 } from './windows.ts';
 
 const now = new Date(2026, 9, 22, 17, 28).getTime();
@@ -20,6 +20,22 @@ const sevenDay = {
   percentUsed: 41.5,
   resetsAt: new Date(2026, 9, 25, 17, 28).toISOString()
 };
+
+function line(
+  windows: readonly Window[],
+  contextPercent?: number,
+  settings: Partial<Settings> = {}
+): string | undefined {
+  return statusLine({
+    contextPercent,
+    now,
+    windows,
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...settings
+    }
+  });
+}
 
 describe('the subscription windows', () => {
   test('a window whose reset has passed is no longer live', () => {
@@ -62,13 +78,25 @@ describe('the subscription windows', () => {
     expect(windowByKey([fiveHour, sevenDay], key)).toBe(fiveHour);
   });
 
-  test('the status line names every window and the nearest reset', () => {
-    expect(statusLine([fiveHour, sevenDay], now)).toBe('5h 63% · 7d 41.5% · reset 18:40');
-    expect(statusLine([{
+  test('the status line: the windows, the thresholds, the context against the compaction, the nearest reset', () => {
+    expect(line([fiveHour, sevenDay], 52)).toBe('5h 63% · 7d 41.5% · soft 80 · hard 90 · ctx 52/70 · reset 18:40');
+    expect(line([{
+      ...fiveHour,
+      percentUsed: 92
+    }, sevenDay])).toBe('5h 92% STOP · 7d 41.5% · soft 80 · hard 90 · reset 18:40');
+    expect(line([{
       kind: 'spend_limit',
       percentUsed: 104
-    }], now)).toBe('spend 104%');
-    expect(statusLine([], now)).toBe(undefined);
+    }])).toBe('spend 104% STOP · soft 80 · hard 90');
+    // The thresholds that are off are not shown; without a compaction threshold the fill stands alone.
+    expect(line([fiveHour], 52.25, {
+      compactAt: 0,
+      limitHard: 0,
+      limitSoft: 0
+    })).toBe('5h 63% · ctx 52.3% · reset 18:40');
+    // Off a subscription: the context alone, and nothing without a reading of either.
+    expect(line([], 52)).toBe('ctx 52/70');
+    expect(line([])).toBe(undefined);
     expect(nextResetAt([sevenDay, fiveHour], now)).toBe(Date.parse(fiveHour.resetsAt));
     expect(nextResetAt([{
       kind: 'spend_limit',

@@ -1,11 +1,12 @@
 // The one session.measure hook of the module: the windows first, the
-// context after, each part on its own so that one that fails leaves the
-// other running. The hook observes; its answer changes nothing.
+// context after, then the status line from both, each part on its own so
+// that one that fails leaves the others running. The hook observes; its
+// answer changes nothing.
 
 import type {EngineInterface, On} from 'claude-code';
 
 import {onMeasureForCompaction} from './compaction.ts';
-import {applyWindows} from './limits.ts';
+import {applyWindows, showStatus} from './limits.ts';
 
 async function part($: EngineInterface, name: string, run: () => Promise<void> | void): Promise<void> {
   try {
@@ -27,6 +28,9 @@ export function registerMeasureHook(on: On): void {
     });
     await part($, 'context', () => {
       onMeasureForCompaction($, event);
+    });
+    await part($, 'status line', () => {
+      showStatus($, now);
     });
     return await next(event);
   });

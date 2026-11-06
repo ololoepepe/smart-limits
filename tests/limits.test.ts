@@ -31,7 +31,7 @@ test('the windows: the status line, one warning per crossing, the refusals and t
   };
   readings.push([fiveHour, sevenDay]);
   await $.session.measure(reading(10, readings.at(-1) ?? []));
-  expect(seen.statuses.at(-1)).toBe('5h 63% · 7d 41% · reset 18:40');
+  expect(seen.statuses.at(-1)).toBe('5h 63% · 7d 41% · soft 60 · hard 80 · ctx 10/50 · reset 18:40');
   expect(seen.toasts).toEqual([
     'the 5-hour window is at 63%, past the soft limit of 60%, resets 18:40 (in 1 h 12 min). Start nothing new.'
   ]);
@@ -47,6 +47,7 @@ test('the windows: the status line, one warning per crossing, the refusals and t
   // The hard limit: the command a second later, the tools refused in every loop.
   readings.push([{...fiveHour, percentUsed: 85}, sevenDay]);
   await $.session.measure(reading(10, readings.at(-1) ?? []));
+  expect(seen.statuses.at(-1)).toBe('5h 85% STOP · 7d 41% · soft 60 · hard 80 · ctx 10/50 · reset 18:40');
   expect(seen.commands).toEqual([]);
   await clock.advance(1000);
   expect(seen.commands).toEqual(['pause now']);
@@ -80,7 +81,7 @@ test('the windows: the status line, one warning per crossing, the refusals and t
   // The reset passes while the session is idle: the stale reading is over,
   // the refusals lift, the line shows what is still live.
   await clock.advance((72 * 60_000) + 2000);
-  expect(seen.statuses.at(-1)).toBe('7d 41% · reset Sun 17:28');
+  expect(seen.statuses.at(-1)).toBe('7d 41% · soft 60 · hard 80 · ctx 10/50 · reset Sun 17:28');
   expect(await denialOf($, {
     command: 'ls',
     tool: 'Bash'
@@ -269,7 +270,7 @@ test('zero thresholds switch the mechanisms off', {
   expect(called.context).toBe(undefined);
   expect(seen.toasts).toEqual([]);
   expect(seen.commands).toEqual([]);
-  expect(seen.statuses.at(-1)).toBe('5h 99% · reset 17:38');
+  expect(seen.statuses.at(-1)).toBe('5h 99% · ctx 99% · reset 17:38');
 });
 
 test('the status command reads the engine and reports', {options: OPTIONS}, async ($, on) => {
@@ -289,4 +290,38 @@ test('the status command reads the engine and reports', {options: OPTIONS}, asyn
     'in force: soft limit crossed by 5h: warned, nothing refused',
     'compaction: the model is reminded: the window is past 50%; none at the model\'s request yet'
   ].join('\n'));
+});
+
+test('a project\'s settings files stand over the user\'s values, the person\'s own file over the shared one', {
+  options: OPTIONS
+}, async ($, on) => {
+  const clock = mock.clock(on, {now: NOW});
+  const block = (options: Record<string, unknown>): Record<string, unknown> => ({
+    pluginConfigs: {
+      'smart-limits@smart-limits': {options}
+    }
+  });
+  const files: Record<string, Record<string, unknown>> = {
+    // --settings outranks a project, as the engine ranks its sources.
+    flag: block({atReset: 'resume from flag'}),
+    local: block({atHard: 'pause from local'}),
+    project: block({
+      atHard: 'pause from project',
+      atReset: 'resume from project',
+      limitHard: 70
+    })
+  };
+  on('settings.read', (_, event) => ({value: files[event.source ?? ''] ?? {}}));
+  const seen = standForTheEngine(on, () => [{
+    kind: 'five_hour',
+    percentUsed: 75,
+    resetsAt: resetIn(72)
+  }]);
+  await start($);
+  await clock.advance(1000);
+  // 75% is under the user's hard limit of 80% and past the project's 70%.
+  expect(seen.commands).toEqual(['pause from local']);
+  const {text} = await $.command.run(runInput);
+  expect(text).toContain('thresholds: compact at 50%, soft 60%, hard 70%, at hard: /pause from local, at reset: ' +
+    '/resume from flag; atHard from .claude/settings.local.json; limitHard from .claude/settings.json');
 });
