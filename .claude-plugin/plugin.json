@@ -1,6 +1,6 @@
 {
   "name": "smart-limits",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lets the model compact the conversation at a point of its own choosing once the context window is past a threshold, and holds the work when a subscription window is nearly used up.",
   "author": {
     "name": "Andrey Bogdanov"
